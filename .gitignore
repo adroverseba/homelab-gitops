@@ -1,0 +1,11 @@
+# Nunca secretos en el repo (ADR 0005). Esto es una red de seguridad
+# contra errores comunes, no un reemplazo de revisar cada commit.
+# Si más adelante se usan secretos cifrados (Sealed Secrets o SOPS),
+# se agrega una excepción explícita para esos archivos.
+*secret*.yaml
+*secret*.yml
+*.env
+.env*
+*.key
+*.pem
+kubeconfig*
