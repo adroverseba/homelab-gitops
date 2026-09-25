@@ -1,0 +1,107 @@
+# Frontend del Habit Tracker: nginx sin root que sirve el build de Vite.
+# Runbook de la Fase 6, paso 6.2.3. La API (/api/) NO pasa por acá: la rutea
+# el Gateway (6.3). El nginx de la imagen responde 404 a /api/ a propósito.
+---
+# Identidad propia del Pod, sin token de la API de Kubernetes montado: el
+# frontend no le habla al clúster (mínimo privilegio). Desde acá se usa el
+# Secret ghcr-pull para bajar la imagen privada.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: habit-tracker-frontend
+  namespace: habit-tracker
+  labels:
+    app.kubernetes.io/name: habit-tracker-frontend
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: habit-tracker
+automountServiceAccountToken: false
+imagePullSecrets:
+  - name: ghcr-pull
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: habit-tracker-frontend
+  namespace: habit-tracker
+  labels:
+    app.kubernetes.io/name: habit-tracker-frontend
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: habit-tracker
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: habit-tracker-frontend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: habit-tracker-frontend
+        app.kubernetes.io/component: frontend
+        app.kubernetes.io/part-of: habit-tracker
+    spec:
+      serviceAccountName: habit-tracker-frontend
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101          # usuario nginx de nginx-unprivileged
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: frontend
+          # Imagen del CI (lint + tests + Trivy), fijada por digest.
+          image: ghcr.io/adroverseba/habit-tracker-frontend:sha-3a4511e@sha256:4027842f7c629675c5695a5fef974efbbf043b97e8cea893eac428371a99661f
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          # nginx-unprivileged escribe su pid y sus temporales en /tmp:
+          # con el disco del contenedor en solo lectura, /tmp va en memoria.
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: habit-tracker-frontend
+  namespace: habit-tracker
+  labels:
+    app.kubernetes.io/name: habit-tracker-frontend
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: habit-tracker
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: habit-tracker-frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

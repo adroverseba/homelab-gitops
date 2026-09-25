@@ -22,7 +22,8 @@ del vault del homelab ("Repositorio GitOps de manifiestos").
 ```
 apps/
 └── habit-tracker/          una carpeta por app
-    └── 00-namespace.yaml   el prefijo numérico ordena el apply
+    ├── 00-namespace.yaml   el prefijo numérico ordena el apply
+    └── 20-frontend.yaml    ServiceAccount + Deployment + Service
 ```
 
 ## Cómo se aplica (a mano hasta la Fase 7)
@@ -46,6 +47,23 @@ nunca acá.
 
 ### habit-tracker
 
-| Secret | Tipo | Para qué |
-|---|---|---|
-| (se completa en el paso 6.2.2 y siguientes) | | |
+| Secret | Tipo | Para qué | Origen |
+|---|---|---|---|
+| `ghcr-pull` | `kubernetes.io/dockerconfigjson` | Bajar las imágenes privadas de `ghcr.io` (lo usan los ServiceAccount de la app) | Token clásico de GitHub, **solo `read:packages`**, vence el 2026-12-24 |
+
+Cómo se crea `ghcr-pull` sin que el token quede en el historial, en un
+archivo o en los argumentos de un proceso (`read -rs` lo lee sin
+mostrarlo; `printf` es interno de bash):
+
+```bash
+read -rs GHCR_TOKEN
+printf '{"auths":{"ghcr.io":{"auth":"%s"}}}' "$(printf 'adroverseba:%s' "$GHCR_TOKEN" | base64 -w0)" \
+  | kubectl create secret generic ghcr-pull -n habit-tracker \
+      --type=kubernetes.io/dockerconfigjson --from-file=.dockerconfigjson=/dev/stdin
+unset GHCR_TOKEN
+kubectl label secret ghcr-pull -n habit-tracker app.kubernetes.io/part-of=habit-tracker
+```
+
+Rotación (antes del vencimiento): token nuevo → `kubectl delete secret
+ghcr-pull -n habit-tracker` → crearlo de nuevo → probar un pull →
+revocar el token viejo en GitHub.
