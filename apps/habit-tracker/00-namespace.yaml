@@ -1,0 +1,19 @@
+# Namespace de la app Habit Tracker (un namespace por app: ADR 0004).
+#
+# Pod Security Admission "restricted": el clúster rechaza cualquier Pod
+# que corra como root, que pueda escalar privilegios, que no descarte las
+# capabilities de Linux o que no use el perfil seccomp por defecto.
+# La versión de la política queda fija a la del clúster (v1.33): una
+# actualización de Kubernetes no la cambia sola.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: habit-tracker
+  labels:
+    app.kubernetes.io/part-of: habit-tracker
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.33
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.33
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.33
