@@ -1,0 +1,52 @@
+# El nombre de la base para la app: postgres.habit-tracker.svc.cluster.local.
+# Runbook de la Fase 6, paso 6.2.4. La base no es un Pod: es la VM db
+# (192.168.122.10), fuera del clúster (ADR 0004). Por eso el Service no tiene
+# selector y la dirección la da un EndpointSlice escrito a mano. Si la base se
+# muda, se cambia solo el EndpointSlice: la configuración de la app no cambia.
+---
+# Sin selector a propósito: ningún controller busca Pods para este Service.
+# Sin targetPort: en un Service sin selector no se usa, porque el puerto de
+# destino sale del EndpointSlice (el servidor igual completa targetPort = port).
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: habit-tracker
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: habit-tracker
+spec:
+  type: ClusterIP
+  ports:
+    - name: postgres          # tiene que coincidir con el del EndpointSlice
+      protocol: TCP
+      port: 5432
+---
+# La dirección real de la base. Se une al Service por el label
+# kubernetes.io/service-name. managed-by lleva un valor propio: así queda
+# claro que no es de un controller de Kubernetes, y ninguno lo toca.
+# Kubernetes NO revisa si la VM está viva (no hay probes para una IP de
+# afuera): ready queda en true siempre. Si db se cae, el nombre sigue
+# apuntando ahí y la app ve fallar la conexión.
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: postgres-db           # prefijo = nombre del Service (convención)
+  namespace: habit-tracker
+  labels:
+    kubernetes.io/service-name: postgres
+    endpointslice.kubernetes.io/managed-by: homelab-gitops
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: habit-tracker
+addressType: IPv4
+ports:
+  - name: postgres
+    protocol: TCP
+    port: 5432
+endpoints:
+  - addresses:
+      - "192.168.122.10"      # VM db (IP reservada por MAC en libvirt)
+    conditions:
+      ready: true

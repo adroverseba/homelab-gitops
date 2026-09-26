@@ -23,6 +23,7 @@ del vault del homelab ("Repositorio GitOps de manifiestos").
 apps/
 └── habit-tracker/          una carpeta por app
     ├── 00-namespace.yaml   el prefijo numérico ordena el apply
+    ├── 10-postgres.yaml    Service sin selector + EndpointSlice → VM db
     └── 20-frontend.yaml    ServiceAccount + Deployment + Service
 ```
 
