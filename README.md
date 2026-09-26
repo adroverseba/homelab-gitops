@@ -24,7 +24,8 @@ apps/
 └── habit-tracker/          una carpeta por app
     ├── 00-namespace.yaml   el prefijo numérico ordena el apply
     ├── 10-postgres.yaml    Service sin selector + EndpointSlice → VM db
-    └── 20-frontend.yaml    ServiceAccount + Deployment + Service
+    ├── 20-frontend.yaml    ServiceAccount + Deployment + Service
+    └── 30-backend.yaml     ConfigMap (el Deployment llega en el 6.2.5)
 ```
 
 ## Cómo se aplica (a mano hasta la Fase 7)
@@ -51,6 +52,7 @@ nunca acá.
 | Secret | Tipo | Para qué | Origen |
 |---|---|---|---|
 | `ghcr-pull` | `kubernetes.io/dockerconfigjson` | Bajar las imágenes privadas de `ghcr.io` (lo usan los ServiceAccount de la app) | Token clásico de GitHub, **solo `read:packages`**, vence el 2026-12-24 |
+| `habit-tracker-backend` | `Opaque` | Variables secretas del backend: `DB_USER`, `DB_PASSWORD` y `APP_ACCESS_SECRET` | La contraseña del rol `habit_tracker` de la VM `db`, y una clave de acceso **propia del homelab** (distinta a la de producción) |
 
 Cómo se crea `ghcr-pull` sin que el token quede en el historial, en un
 archivo o en los argumentos de un proceso (`read -rs` lo lee sin
@@ -68,3 +70,23 @@ kubectl label secret ghcr-pull -n habit-tracker app.kubernetes.io/part-of=habit-
 Rotación (antes del vencimiento): token nuevo → `kubectl delete secret
 ghcr-pull -n habit-tracker` → crearlo de nuevo → probar un pull →
 revocar el token viejo en GitHub.
+
+Cómo se crea `habit-tracker-backend`, con la misma técnica. Cada `read -rs`
+se pega **solo** (queda esperando el valor, que no se ve). Los valores van
+por *stdin* como un *env-file*: una línea `CLAVE=valor` por variable, así
+que no pueden tener saltos de línea.
+
+```bash
+read -rs DB_PASSWORD
+read -rs APP_ACCESS_SECRET
+printf 'DB_USER=habit_tracker\nDB_PASSWORD=%s\nAPP_ACCESS_SECRET=%s\n' "$DB_PASSWORD" "$APP_ACCESS_SECRET" \
+  | kubectl create secret generic habit-tracker-backend -n habit-tracker --from-env-file=/dev/stdin
+unset DB_PASSWORD APP_ACCESS_SECRET
+kubectl label secret habit-tracker-backend -n habit-tracker \
+  app.kubernetes.io/name=habit-tracker-backend app.kubernetes.io/component=backend app.kubernetes.io/part-of=habit-tracker
+```
+
+Rotación: valor nuevo (en `db`, `\password habit_tracker`; o una clave de
+acceso nueva) → `kubectl delete secret habit-tracker-backend -n
+habit-tracker` → crearlo de nuevo → `kubectl rollout restart` del backend
+(las variables de entorno se leen solo al arrancar).

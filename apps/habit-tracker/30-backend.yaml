@@ -1,0 +1,38 @@
+# Backend del Habit Tracker (Spring Boot). Runbook de la Fase 6.
+# Paso 6.2.4: solo la configuración (ConfigMap). La ServiceAccount, el
+# Deployment y el Service llegan en el paso 6.2.5.
+#
+# Lo secreto NO va acá: DB_USER, DB_PASSWORD y APP_ACCESS_SECRET viven en el
+# Secret habit-tracker-backend, creado a mano en el control-plane (ver el
+# README, "Secretos por app").
+---
+# Variables que lee backend/src/main/resources/application.yml (perfil prod).
+# Un cambio acá NO reinicia los Pods: las variables de entorno se leen al
+# arrancar. Después de cambiarlo hace falta un rollout restart del backend.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: habit-tracker-backend-config
+  namespace: habit-tracker
+  labels:
+    app.kubernetes.io/name: habit-tracker-backend
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: habit-tracker
+data:
+  # Sin esto, la app arranca en "dev" sin avisar (DEPLOY.md de la app).
+  SPRING_PROFILES_ACTIVE: prod
+  # El Service sin selector de 10-postgres.yaml: un nombre estable, no la IP.
+  DB_HOST: postgres.habit-tracker.svc.cluster.local
+  DB_PORT: "5432"
+  DB_NAME: habit_tracker
+  # Se pega tal cual al final de la URL JDBC. require = cifrado obligatorio
+  # (el pg_hba de db solo acepta hostssl), pero sin verificar el certificado
+  # del servidor: verify-full queda para la Fase 9.
+  DB_SSL_MODE: "?sslmode=require"
+  # A propósito NO van:
+  # - SENTRY_DSN: sin DSN, Sentry queda inerte. El homelab no le manda
+  #   errores al Sentry de producción.
+  # - APP_CORS_ALLOWED_ORIGINS: con rutas relativas, el navegador no hace
+  #   pedidos cross-origin. Se define en la 6.3, con la URL del Gateway.
+  # - SERVER_PORT: el ENTRYPOINT de la imagen pasa -Dserver.port=8080, y una
+  #   propiedad de la JVM le gana a una variable de entorno.
