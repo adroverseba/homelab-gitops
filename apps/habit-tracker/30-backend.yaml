@@ -1,6 +1,6 @@
-# Backend del Habit Tracker (Spring Boot). Runbook de la Fase 6.
-# Paso 6.2.4: solo la configuración (ConfigMap). La ServiceAccount, el
-# Deployment y el Service llegan en el paso 6.2.5.
+# Backend del Habit Tracker (Spring Boot). Runbook de la Fase 6, pasos 6.2.4
+# (ConfigMap) y 6.2.5 (ServiceAccount, Deployment y Service). La API se
+# prueba con port-forward hasta que el Gateway rutee /api (6.3).
 #
 # Lo secreto NO va acá: DB_USER, DB_PASSWORD y APP_ACCESS_SECRET viven en el
 # Secret habit-tracker-backend, creado a mano en el control-plane (ver el
@@ -36,3 +36,138 @@ data:
   #   pedidos cross-origin. Se define en la 6.3, con la URL del Gateway.
   # - SERVER_PORT: el ENTRYPOINT de la imagen pasa -Dserver.port=8080, y una
   #   propiedad de la JVM le gana a una variable de entorno.
+---
+# Identidad propia del Pod, sin token de la API de Kubernetes montado: el
+# backend no le habla al clúster (mínimo privilegio). Desde acá se usa el
+# Secret ghcr-pull para bajar la imagen privada.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: habit-tracker-backend
+  namespace: habit-tracker
+  labels:
+    app.kubernetes.io/name: habit-tracker-backend
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: habit-tracker
+automountServiceAccountToken: false
+imagePullSecrets:
+  - name: ghcr-pull
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: habit-tracker-backend
+  namespace: habit-tracker
+  labels:
+    app.kubernetes.io/name: habit-tracker-backend
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: habit-tracker
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: habit-tracker-backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: habit-tracker-backend
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/part-of: habit-tracker
+    spec:
+      serviceAccountName: habit-tracker-backend
+      automountServiceAccountToken: false
+      # Sin las variables POSTGRES_SERVICE_HOST, POSTGRES_PORT=tcp://… que
+      # Kubernetes agrega por cada Service del namespace: la app no las usa,
+      # y son una fuente clásica de choques de nombres.
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001          # el mismo usuario que fija el PR #2 del Dockerfile
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: backend
+          # Imagen del CI (lint + tests + Trivy: 0 CRITICAL), fijada por
+          # digest. Commit 2009243 de homelab/fase-5: trae el Tomcat 10.1.60.
+          image: ghcr.io/adroverseba/habit-tracker-backend:sha-2009243@sha256:af2949fdef25cb90f19810dd8df38421b95eb3dea895c3ad41bee495f0e37668
+          # El ENTRYPOINT de la imagen es "sh -c 'java …'" sin exec: la JVM no
+          # es el PID 1, no recibe el SIGTERM y se la mata a los 30 s. Hasta
+          # el PR #2, se arranca java directo, con el mismo comando.
+          command: ["java", "-Dserver.port=8080", "-jar", "app.jar"]
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: habit-tracker-backend-config
+            - secretRef:
+                name: habit-tracker-backend
+          env:
+            # Heap al 60 % del límite de memoria (el resto: metaspace, hilos,
+            # code cache). Si se queda sin heap, la JVM termina y Kubernetes
+            # la reinicia, en vez de seguir a medias.
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=60 -XX:+ExitOnOutOfMemoryError"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          # Tomcat y la JVM escriben en /tmp: con el disco en solo lectura, /tmp
+          # va en un emptyDir en disco (en memoria gastaría el límite de RAM).
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          # Sin límite de CPU a propósito (el throttling frena a la JVM,
+          # sobre todo al arrancar). El de memoria sí va.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 768Mi
+          # /api/v1/health responde 200 si el proceso vive, sin consultar la
+          # base: una caída de db no provoca reinicios en cadena.
+          startupProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30    # hasta 150 s para arrancar (Flyway incluido)
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2       # margen para las pausas del GC
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: habit-tracker-backend
+  namespace: habit-tracker
+  labels:
+    app.kubernetes.io/name: habit-tracker-backend
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: habit-tracker
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: habit-tracker-backend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

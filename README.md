@@ -25,7 +25,7 @@ apps/
     ├── 00-namespace.yaml   el prefijo numérico ordena el apply
     ├── 10-postgres.yaml    Service sin selector + EndpointSlice → VM db
     ├── 20-frontend.yaml    ServiceAccount + Deployment + Service
-    └── 30-backend.yaml     ConfigMap (el Deployment llega en el 6.2.5)
+    └── 30-backend.yaml     ConfigMap + ServiceAccount + Deployment + Service
 ```
 
 ## Cómo se aplica (a mano hasta la Fase 7)
