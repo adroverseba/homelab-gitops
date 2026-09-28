@@ -20,12 +20,16 @@ del vault del homelab ("Repositorio GitOps de manifiestos").
 ## Estructura
 
 ```
-apps/
-└── habit-tracker/          una carpeta por app
-    ├── 00-namespace.yaml   el prefijo numérico ordena el apply
-    ├── 10-postgres.yaml    Service sin selector + EndpointSlice → VM db
-    ├── 20-frontend.yaml    ServiceAccount + Deployment + Service
-    └── 30-backend.yaml     ConfigMap + ServiceAccount + Deployment + Service
+apps/                         lo de cada app, en su namespace
+└── habit-tracker/            una carpeta por app
+    ├── 00-namespace.yaml     el prefijo numérico ordena el apply
+    ├── 10-postgres.yaml      Service sin selector + EndpointSlice → VM db
+    ├── 20-frontend.yaml      ServiceAccount + Deployment + Service
+    └── 30-backend.yaml       ConfigMap + ServiceAccount + Deployment + Service
+platform/                     lo compartido por todas las apps
+└── envoy-gateway/            controlador de la Gateway API (ADR 0006)
+    ├── install-v1.9.2.yaml   archivo oficial de la release, sin tocar
+    └── kustomization.yaml    los cambios propios (Pod Security, digest)
 ```
 
 ## Cómo se aplica (a mano hasta la Fase 7)
@@ -41,6 +45,42 @@ kubectl apply -f ~/homelab-gitops/apps/habit-tracker/
 `kubectl diff` sale con código 1 cuando **hay** diferencias: es lo
 esperado, no un error. En la Fase 7, Argo CD hace el pull y el apply
 solo.
+
+## Plataforma
+
+### Envoy Gateway (`platform/envoy-gateway/`)
+
+Controlador de la Gateway API: lee los `Gateway` y las `HTTPRoute` y
+programa los Envoy que reciben el tráfico. Decisión y trade-offs: ADR
+0006 del vault.
+
+- **Versión:** `v1.9.2`. Es la última línea que soporta Kubernetes 1.33.
+  Antes de pasar a la 1.10, hay que actualizar Kubernetes.
+- **`install-v1.9.2.yaml` es el archivo oficial, sin tocar.** Su
+  `sha256` es
+  `0412a72907e57ff9b73c56a7bf6df5190bf0f6e4f8bb4bba34e38630bbab5778`
+  (bajado el 2026-09-28). Para comprobar que es idéntico al de la
+  release:
+
+  ```bash
+  curl -fsSL https://github.com/envoyproxy/gateway/releases/download/v1.9.2/install.yaml | sha256sum
+  ```
+
+- **Los cambios propios** van en `kustomization.yaml`: labels de Pod
+  Security `restricted` en `envoy-gateway-system` y la imagen del
+  controlador por digest.
+- **Se aplica del lado del servidor y con `-k`** (Kustomize), porque los
+  CRDs no entran en la anotación del *apply* clásico:
+
+  ```bash
+  kubectl kustomize ~/homelab-gitops/platform/envoy-gateway/ > /tmp/eg.yaml   # revisar lo que se va a aplicar
+  kubectl apply --server-side -k ~/homelab-gitops/platform/envoy-gateway/
+  ```
+
+- **Para actualizar:** bajar el `install.yaml` nuevo con su versión en el
+  nombre, anotar su `sha256` acá, cambiar `resources` y el digest en
+  `kustomization.yaml`, y leer las notas de la release. Un commit por
+  actualización, sin mezclarla con otros cambios.
 
 ## Secretos por app
 

@@ -1,0 +1,44 @@
+# Envoy Gateway v1.9.2: el controlador de la Gateway API del homelab.
+# Decisión: ADR 0006 del vault. Runbook de la Fase 6, paso 6.3.1.
+#
+# install-v1.9.2.yaml es el archivo oficial de la release, SIN TOCAR: así
+# se puede comparar con el original por su sha256 (ver el README). Los
+# cambios propios van acá, y Kustomize (viene dentro de kubectl) los
+# aplica al armar el resultado.
+#
+# Se aplica del lado del servidor: los CRDs son demasiado grandes para la
+# anotación que usa el apply clásico.
+#   kubectl apply --server-side -k platform/envoy-gateway/
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - install-v1.9.2.yaml
+patches:
+  # Pod Security "restricted" también en la plataforma: en este namespace
+  # corren el controlador y el Envoy que recibe el tráfico de la red de
+  # casa. Versión de la política fija, como en las apps.
+  - target:
+      kind: Namespace
+      name: envoy-gateway-system
+    patch: |-
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: envoy-gateway-system
+        labels:
+          app.kubernetes.io/part-of: homelab-platform
+          pod-security.kubernetes.io/enforce: restricted
+          pod-security.kubernetes.io/enforce-version: v1.33
+          pod-security.kubernetes.io/warn: restricted
+          pod-security.kubernetes.io/warn-version: v1.33
+          pod-security.kubernetes.io/audit: restricted
+          pod-security.kubernetes.io/audit-version: v1.33
+images:
+  # El controlador y el Job de certificados, por digest (índice
+  # multiplataforma de Docker Hub, consultado el 2026-09-28): corre
+  # exactamente lo que se revisó, aunque alguien vuelva a publicar el tag.
+  # Queda por tag la imagen del "shutdown manager" de los Pods de Envoy:
+  # está dentro de un texto del ConfigMap, y Kustomize no la ve.
+  - name: envoyproxy/gateway
+    newTag: v1.9.2
+    digest: sha256:9d67017c442a70e6ae9f1a358e6c80eb653c67c2e40823d9a991e0daf37ba926
