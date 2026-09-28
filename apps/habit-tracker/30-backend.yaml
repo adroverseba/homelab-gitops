@@ -32,8 +32,10 @@ data:
   # A propósito NO van:
   # - SENTRY_DSN: sin DSN, Sentry queda inerte. El homelab no le manda
   #   errores al Sentry de producción.
-  # - APP_CORS_ALLOWED_ORIGINS: con rutas relativas, el navegador no hace
-  #   pedidos cross-origin. Se define en la 6.3, con la URL del Gateway.
+  # - APP_CORS_ALLOWED_ORIGINS: el frontend llama a la API con rutas
+  #   relativas, y el Gateway (40-httproute.yaml) sirve los dos desde el
+  #   mismo origen: el navegador no hace pedidos cross-origin. Se comprueba
+  #   en el navegador (runbook de la Fase 6, 6.3.5).
   # - SERVER_PORT: el ENTRYPOINT de la imagen pasa -Dserver.port=8080, y una
   #   propiedad de la JVM le gana a una variable de entorno.
 ---

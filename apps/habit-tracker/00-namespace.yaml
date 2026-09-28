@@ -5,12 +5,17 @@
 # capabilities de Linux o que no use el perfil seccomp por defecto.
 # La versión de la política queda fija a la del clúster (v1.33): una
 # actualización de Kubernetes no la cambia sola.
+#
+# homelab/gateway: allowed habilita a esta app a publicar rutas en el
+# Gateway compartido (platform/gateway/30-gateway.yaml). Sin el label, el
+# Gateway ignora sus HTTPRoute.
 apiVersion: v1
 kind: Namespace
 metadata:
   name: habit-tracker
   labels:
     app.kubernetes.io/part-of: habit-tracker
+    homelab/gateway: allowed
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/enforce-version: v1.33
     pod-security.kubernetes.io/warn: restricted

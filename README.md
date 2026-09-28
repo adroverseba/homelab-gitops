@@ -25,7 +25,8 @@ apps/                         lo de cada app, en su namespace
     ├── 00-namespace.yaml     el prefijo numérico ordena el apply
     ├── 10-postgres.yaml      Service sin selector + EndpointSlice → VM db
     ├── 20-frontend.yaml      ServiceAccount + Deployment + Service
-    └── 30-backend.yaml       ConfigMap + ServiceAccount + Deployment + Service
+    ├── 30-backend.yaml       ConfigMap + ServiceAccount + Deployment + Service
+    └── 40-httproute.yaml     rutas en el Gateway compartido: /api → backend, / → frontend
 platform/                     lo compartido por todas las apps
 ├── envoy-gateway/            controlador de la Gateway API (ADR 0006)
 │   ├── install-v1.9.2.yaml   archivo oficial de la release, sin tocar

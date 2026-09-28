@@ -1,0 +1,38 @@
+# Rutas públicas del Habit Tracker en el Gateway compartido del homelab.
+# Runbook de la Fase 6, paso 6.3.3 (ADR 0006 y 0007).
+#
+# /api (y todo lo que cuelga de ahí) → backend. Todo lo demás → frontend.
+# Gana la coincidencia más larga, sin importar el orden de las reglas, y
+# PathPrefix compara por segmentos: /api/v1/... va al backend, /apix no.
+#
+# El frontend llama a la API con rutas relativas (/api/...): el navegador
+# ve un solo origen, así que no hace falta CORS (ver el ConfigMap del
+# backend, en 30-backend.yaml).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: habit-tracker
+  namespace: habit-tracker
+  labels:
+    app.kubernetes.io/name: habit-tracker
+    app.kubernetes.io/part-of: habit-tracker
+spec:
+  parentRefs:
+    - name: homelab
+      namespace: gateway
+      sectionName: http
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api
+      backendRefs:
+        - name: habit-tracker-backend
+          port: 80
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: habit-tracker-frontend
+          port: 80
