@@ -1,0 +1,13 @@
+# La "clase" de Gateway que implementa Envoy Gateway (ADR 0006).
+# El controllerName es el que reclama el controlador (ConfigMap
+# envoy-gateway-config): así sabe qué Gateways son suyos. Si mañana se
+# cambia de implementación, se cambia esta clase y no las rutas de las
+# apps (ADR 0006, punto 6).
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: envoy
+  labels:
+    app.kubernetes.io/part-of: homelab-platform
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller

@@ -1,0 +1,18 @@
+# Namespace del Gateway compartido del homelab (ADR 0006, punto 4).
+# Acá viven el Gateway y su EnvoyProxy: son de la plataforma, no de una
+# app. Los Pods de Envoy los crea el controlador en envoy-gateway-system.
+#
+# Pod Security "restricted" y versión fija, como en todo el clúster: acá
+# no corre ningún Pod, pero si alguien creara uno, tendría que cumplirla.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gateway
+  labels:
+    app.kubernetes.io/part-of: homelab-platform
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.33
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.33
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.33

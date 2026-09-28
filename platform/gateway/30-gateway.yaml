@@ -1,0 +1,36 @@
+# El Gateway compartido del homelab (ADR 0006, punto 4): una sola entrada
+# HTTP para todas las apps.
+#
+# Cada app engancha sus HTTPRoute desde su propio namespace, pero SOLO si
+# ese namespace tiene el label "homelab/gateway: allowed". Mínimo
+# privilegio: una app no se puede publicar sola; habilitarla es una
+# decisión explícita, que queda en el repo.
+#
+# Solo HTTP por ahora; TLS llega en la Fase 9.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: homelab
+  namespace: gateway
+  labels:
+    app.kubernetes.io/part-of: homelab-platform
+spec:
+  gatewayClassName: envoy
+  # Configuración de su Envoy (Service NodePort 30080): 20-envoyproxy.yaml.
+  infrastructure:
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: homelab
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        kinds:
+          - kind: HTTPRoute
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              homelab/gateway: allowed

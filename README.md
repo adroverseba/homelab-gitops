@@ -27,9 +27,14 @@ apps/                         lo de cada app, en su namespace
     ├── 20-frontend.yaml      ServiceAccount + Deployment + Service
     └── 30-backend.yaml       ConfigMap + ServiceAccount + Deployment + Service
 platform/                     lo compartido por todas las apps
-└── envoy-gateway/            controlador de la Gateway API (ADR 0006)
-    ├── install-v1.9.2.yaml   archivo oficial de la release, sin tocar
-    └── kustomization.yaml    los cambios propios (Pod Security, digest)
+├── envoy-gateway/            controlador de la Gateway API (ADR 0006)
+│   ├── install-v1.9.2.yaml   archivo oficial de la release, sin tocar
+│   └── kustomization.yaml    los cambios propios (Pod Security, digest)
+└── gateway/                  la entrada HTTP compartida (ADR 0006 y 0007)
+    ├── 00-namespace.yaml     namespace "gateway" (restricted)
+    ├── 10-gatewayclass.yaml  GatewayClass "envoy"
+    ├── 20-envoyproxy.yaml    su Envoy: Service NodePort 30080 (lo usa HAProxy)
+    └── 30-gateway.yaml       Gateway "homelab", HTTP :80, solo namespaces con label
 ```
 
 ## Cómo se aplica (a mano hasta la Fase 7)
@@ -81,6 +86,27 @@ programa los Envoy que reciben el tráfico. Decisión y trade-offs: ADR
   nombre, anotar su `sha256` acá, cambiar `resources` y el digest en
   `kustomization.yaml`, y leer las notas de la release. Un commit por
   actualización, sin mezclarla con otros cambios.
+
+### El Gateway compartido (`platform/gateway/`)
+
+Una sola entrada HTTP para todas las apps: el Gateway `homelab` (namespace
+`gateway`), con un Envoy que Envoy Gateway despliega en
+`envoy-gateway-system` y expone en el **NodePort 30080** de los workers.
+Desde la red de casa se llega por el HAProxy del host (ADR 0007).
+
+Para publicar una app:
+
+1. Su namespace lleva el label `homelab/gateway: allowed`. Sin ese label,
+   el Gateway ignora sus rutas.
+2. La app declara sus `HTTPRoute` en su carpeta, con `parentRefs` al
+   Gateway `homelab` del namespace `gateway`.
+
+Se aplica como las apps (`kubectl diff` no sirve la primera vez: los
+objetos van en un namespace que todavía no existe):
+
+```bash
+kubectl apply -f ~/homelab-gitops/platform/gateway/
+```
 
 ## Secretos por app
 

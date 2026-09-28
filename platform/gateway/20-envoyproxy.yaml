@@ -1,0 +1,41 @@
+# Cómo se despliega el Envoy del Gateway "homelab" (ADR 0006, punto 5, y
+# ADR 0007, punto 4). Lo lee el controlador cuando arma los Pods y el
+# Service de Envoy en envoy-gateway-system.
+#
+# - Service NodePort con el puerto 30080 fijo: ahí apunta el HAProxy del
+#   host (ADR 0007). Por defecto, Envoy Gateway crea un LoadBalancer, y en
+#   este clúster no hay quién le asigne una IP.
+# - externalTrafficPolicy Cluster: cualquier worker acepta la conexión y
+#   kube-proxy la lleva hasta el Pod de Envoy, esté donde esté. Envoy
+#   Gateway usa Local por defecto, y con Local el worker que no tiene el
+#   Pod descarta la conexión.
+# - Imagen de Envoy: la de fábrica de Envoy Gateway v1.9.2, que ya viene
+#   fijada por digest en su código (envoy:distroless-v1.39.1@sha256:eb2c01c1…).
+#   Es la pareja probada con el controlador y se actualiza junto con él.
+# - Recursos: por ahora los de fábrica. Se fijan después de medir el
+#   consumo real (runbook de la Fase 6, 6.3).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: homelab
+  namespace: gateway
+  labels:
+    app.kubernetes.io/part-of: homelab-platform
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        type: NodePort
+        externalTrafficPolicy: Cluster
+        # El Service no tiene un campo para fijar el NodePort: se agrega con
+        # un parche sobre el Service que genera el controlador. Se combina
+        # con el puerto 80 del listener "http" (la clave de la lista es el
+        # número de puerto).
+        patch:
+          type: StrategicMerge
+          value:
+            spec:
+              ports:
+                - port: 80
+                  nodePort: 30080
