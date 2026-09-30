@@ -28,7 +28,10 @@ metadata:
     app.kubernetes.io/component: frontend
     app.kubernetes.io/part-of: habit-tracker
 spec:
-  replicas: 1
+  # Una réplica por worker: si se cae uno, la otra sigue atendiendo
+  # (runbook de alta disponibilidad, HA.2; con 1 réplica, la caída de
+  # worker-1 cortó la app 6 min 30 s en HA.1).
+  replicas: 2
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -42,6 +45,24 @@ spec:
     spec:
       serviceAccountName: habit-tracker-frontend
       automountServiceAccountToken: false
+      # El scheduler reparte las réplicas por nodo. Solo se aplica al crear
+      # cada Pod: no mueve los que ya corren.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          # Solo cuentan los nodos cuyos taints el Pod tolera. Sin esto
+          # (el valor por defecto es Ignore), el control-plane cuenta como
+          # un nodo con 0 Pods: una tercera réplica no entraría nunca, y el
+          # reemplazo de un Pod de un worker caído quedaría Pending.
+          nodeTaintsPolicy: Honor
+          # El reparto se calcula por versión de la plantilla: en un
+          # rollout, los Pods viejos no desvían a los nuevos.
+          matchLabelKeys:
+            - pod-template-hash
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: habit-tracker-frontend
       securityContext:
         runAsNonRoot: true
         runAsUser: 101          # usuario nginx de nginx-unprivileged
@@ -105,3 +126,25 @@ spec:
     - name: http
       port: 80
       targetPort: http
+---
+# Un drain (mantenimiento, por ejemplo al actualizar Kubernetes) saca de a
+# un Pod del frontend y espera a que el reemplazo esté listo. Protege solo
+# de las interrupciones voluntarias (la API de eviction): una VM que se
+# apaga no pide permiso.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: habit-tracker-frontend
+  namespace: habit-tracker
+  labels:
+    app.kubernetes.io/name: habit-tracker-frontend
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: habit-tracker
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: habit-tracker-frontend
+  # Un Pod que no está listo (por ejemplo, en CrashLoopBackOff) se puede
+  # desalojar igual: si no, un Pod roto trabaría el drain del nodo.
+  unhealthyPodEvictionPolicy: AlwaysAllow
