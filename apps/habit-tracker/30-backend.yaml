@@ -83,6 +83,19 @@ spec:
       # Kubernetes agrega por cada Service del namespace: la app no las usa,
       # y son una fuente clásica de choques de nombres.
       enableServiceLinks: false
+      # Reparto por nodo (runbook de alta disponibilidad, HA.3): con 2
+      # réplicas, una en cada worker. Mismos campos que el frontend; el
+      # porqué de cada uno está comentado en 20-frontend.yaml.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          nodeTaintsPolicy: Honor
+          matchLabelKeys:
+            - pod-template-hash
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: habit-tracker-backend
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001          # el mismo usuario que fija el PR #2 del Dockerfile
