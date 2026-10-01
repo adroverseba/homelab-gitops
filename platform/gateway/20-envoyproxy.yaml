@@ -33,6 +33,21 @@ spec:
     kubernetes:
       envoyDeployment:
         replicas: 2
+        pod:
+          # Una réplica por worker, con la misma regla que el frontend y el
+          # backend de la app. Las etiquetas owning-gateway-* las pone el
+          # controlador y distinguen a los Envoy de este Gateway.
+          topologySpreadConstraints:
+            - maxSkew: 1
+              topologyKey: kubernetes.io/hostname
+              whenUnsatisfiable: DoNotSchedule
+              nodeTaintsPolicy: Honor
+              matchLabelKeys:
+                - pod-template-hash
+              labelSelector:
+                matchLabels:
+                  gateway.envoyproxy.io/owning-gateway-name: homelab
+                  gateway.envoyproxy.io/owning-gateway-namespace: gateway
       envoyPDB:
         minAvailable: 1
       envoyService:
