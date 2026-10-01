@@ -14,6 +14,12 @@
 #   Es la pareja probada con el controlador y se actualiza junto con él.
 # - Recursos: por ahora los de fábrica. Se fijan después de medir el
 #   consumo real (runbook de la Fase 6, 6.3).
+# - Alta disponibilidad (runbook de alta disponibilidad, HA.4): 2 réplicas
+#   y un PDB, para que la caída o el drain de un worker no deje al
+#   clúster sin puerta de entrada. El PDB no lleva
+#   unhealthyPodEvictionPolicy: AlwaysAllow (el CRD no tiene el campo; iría
+#   con un patch). Deuda aceptada: si las dos réplicas están rotas a la
+#   vez, un drain se traba.
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: EnvoyProxy
 metadata:
@@ -25,6 +31,10 @@ spec:
   provider:
     type: Kubernetes
     kubernetes:
+      envoyDeployment:
+        replicas: 2
+      envoyPDB:
+        minAvailable: 1
       envoyService:
         type: NodePort
         externalTrafficPolicy: Cluster
