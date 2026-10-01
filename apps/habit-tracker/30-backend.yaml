@@ -65,7 +65,10 @@ metadata:
     app.kubernetes.io/component: backend
     app.kubernetes.io/part-of: habit-tracker
 spec:
-  replicas: 1
+  # Una réplica por worker (runbook de alta disponibilidad, HA.3). Cada
+  # una abre hasta 10 conexiones a db (Hikari por defecto): 20 de las 100
+  # que acepta Postgres.
+  replicas: 2
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -186,3 +189,22 @@ spec:
     - name: http
       port: 80
       targetPort: http
+---
+# Un drain saca de a un Pod del backend y espera a que el reemplazo esté
+# listo. Solo protege de las interrupciones voluntarias; el porqué de cada
+# campo está en el PDB de 20-frontend.yaml.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: habit-tracker-backend
+  namespace: habit-tracker
+  labels:
+    app.kubernetes.io/name: habit-tracker-backend
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: habit-tracker
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: habit-tracker-backend
+  unhealthyPodEvictionPolicy: AlwaysAllow
