@@ -103,6 +103,17 @@ spec:
               port: http
             periodSeconds: 20
             failureThreshold: 3
+          # Al apagarse, sigue atendiendo 10 s antes del SIGTERM. Kubernetes
+          # saca el Pod de la lista de destinos y le avisa que se apague a la
+          # vez, y el Envoy se entera un instante después: sin esta espera,
+          # algún pedido le llega a un Pod que ya se va (la "carrera del
+          # desalojo", confirmada con los logs del Envoy en la actualización
+          # a la 1.35). La acción sleep no necesita un shell en la imagen, y
+          # entra holgada en los 30 s de gracia por defecto.
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 10
       volumes:
         - name: tmp
           emptyDir:
