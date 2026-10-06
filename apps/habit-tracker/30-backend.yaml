@@ -167,6 +167,16 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 2
             failureThreshold: 3
+          # Al apagarse, sigue atendiendo 10 s antes del SIGTERM: el mismo
+          # arreglo que el frontend para la "carrera del desalojo" (el Envoy
+          # se entera tarde de que el Pod salió de la lista). Después del
+          # SIGTERM, la JVM tiene 20 s más (30 s de gracia por defecto). El
+          # apagado ordenado de Tomcat (server.shutdown=graceful) es aparte,
+          # en el repo de la app.
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 10
       volumes:
         - name: tmp
           emptyDir:
