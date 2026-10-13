@@ -29,13 +29,16 @@ data:
   # (el pg_hba de db solo acepta hostssl), pero sin verificar el certificado
   # del servidor: verify-full queda para la Fase 9.
   DB_SSL_MODE: "?sslmode=require"
+  # La dirección de Tailscale (ADR 0009): tailscale serve descifra el HTTPS
+  # en el host y el backend recibe http, así que el Origin https:// del
+  # navegador le parece de otro origen y rechaza las escrituras con 403
+  # (Invalid CORS request). Arreglo de fondo pendiente: que el backend sepa
+  # que la petición original fue HTTPS (X-Forwarded-Proto). Runbook -
+  # Tailscale y HTTPS, TS.10.
+  APP_CORS_ALLOWED_ORIGINS: "https://homelab.taile02a6a.ts.net"
   # A propósito NO van:
   # - SENTRY_DSN: sin DSN, Sentry queda inerte. El homelab no le manda
   #   errores al Sentry de producción.
-  # - APP_CORS_ALLOWED_ORIGINS: el frontend llama a la API con rutas
-  #   relativas, y el Gateway (40-httproute.yaml) sirve los dos desde el
-  #   mismo origen: el navegador no hace pedidos cross-origin. Se comprueba
-  #   en el navegador (runbook de la Fase 6, 6.3.5).
   # - SERVER_PORT: el ENTRYPOINT de la imagen pasa -Dserver.port=8080, y una
   #   propiedad de la JVM le gana a una variable de entorno.
 ---
