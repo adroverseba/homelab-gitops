@@ -110,12 +110,14 @@ spec:
           type: RuntimeDefault
       containers:
         - name: backend
-          # Imagen del CI (lint + tests + Trivy: 0 CRITICAL), fijada por
-          # digest. Commit 2009243 de homelab/fase-5: trae el Tomcat 10.1.60.
-          image: ghcr.io/adroverseba/habit-tracker-backend:sha-2009243@sha256:af2949fdef25cb90f19810dd8df38421b95eb3dea895c3ad41bee495f0e37668
-          # El ENTRYPOINT de la imagen es "sh -c 'java …'" sin exec: la JVM no
-          # es el PID 1, no recibe el SIGTERM y se la mata a los 30 s. Hasta
-          # el PR #2, se arranca java directo, con el mismo comando.
+          # Imagen del CI desde main (lint + tests + Trivy), fijada por
+          # digest. Merge 41141e9 (PR #2): bases fijadas por digest, usuario
+          # 10001 y exec en el ENTRYPOINT.
+          image: ghcr.io/adroverseba/habit-tracker-backend:sha-41141e9@sha256:a150f61dfbb8feb56d20baf12fe2fc849e1b37647e94e06f83b70e90664e68ba
+          # La imagen vieja arrancaba con "sh -c 'java …'" sin exec: la JVM no
+          # era el PID 1, no recibía el SIGTERM y se la mataba a los 30 s. La
+          # imagen nueva ya trae el exec; este command se saca en un cambio
+          # aparte (un cambio a la vez: primero la imagen, después el arranque).
           command: ["java", "-Dserver.port=8080", "-jar", "app.jar"]
           ports:
             - name: http
