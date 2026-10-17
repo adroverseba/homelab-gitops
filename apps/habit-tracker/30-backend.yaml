@@ -114,11 +114,10 @@ spec:
           # digest. Merge 41141e9 (PR #2): bases fijadas por digest, usuario
           # 10001 y exec en el ENTRYPOINT.
           image: ghcr.io/adroverseba/habit-tracker-backend:sha-41141e9@sha256:a150f61dfbb8feb56d20baf12fe2fc849e1b37647e94e06f83b70e90664e68ba
-          # La imagen vieja arrancaba con "sh -c 'java …'" sin exec: la JVM no
-          # era el PID 1, no recibía el SIGTERM y se la mataba a los 30 s. La
-          # imagen nueva ya trae el exec; este command se saca en un cambio
-          # aparte (un cambio a la vez: primero la imagen, después el arranque).
-          command: ["java", "-Dserver.port=8080", "-jar", "app.jar"]
+          # Sin command: el ENTRYPOINT de la imagen ("sh -c 'exec java …'")
+          # deja a la JVM como PID 1, así recibe el SIGTERM y se apaga en
+          # orden. El puerto queda en 8080 porque el Pod no define PORT
+          # (enableServiceLinks: false evita variables inyectadas).
           ports:
             - name: http
               containerPort: 8080
