@@ -1,0 +1,18 @@
+# Namespace de Argo CD (ADR 0010 del vault). El install.yaml oficial no
+# trae el suyo: se instala "dentro" de un namespace que pone quien lo usa.
+#
+# Pod Security "restricted" y versión fija, como en todo el clúster. Los
+# 10 contenedores del install.yaml ya la cumplen (sin root, sin
+# privilegios, seccomp RuntimeDefault): no hace falta parchearlos.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+  labels:
+    app.kubernetes.io/part-of: homelab-platform
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.33
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.33
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.33

@@ -1,0 +1,144 @@
+# Argo CD v3.5.5: aplica solo lo que cambia en este repo (GitOps).
+# Decisión: ADR 0010 del vault. Runbook "CD con Argo CD", paso CD.6.
+#
+# install-v3.5.5.yaml es el archivo oficial de la release (modo non-HA),
+# SIN TOCAR: se compara con el original por su sha256 (ver el README). Los
+# cambios propios van acá.
+#
+# Se aplica del lado del servidor: los CRDs son demasiado grandes para la
+# anotación que usa el apply clásico.
+#   kubectl apply --server-side -k platform/argocd/
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Todo lo del install.yaml va a este namespace (el archivo casi no dice
+# "namespace:"; espera que lo ponga quien instala).
+namespace: argocd
+resources:
+  - 00-namespace.yaml
+  - install-v3.5.5.yaml
+patches:
+  # Non-HA (decisión del usuario, 2026-10-17): el modo HA pide 3 copias de
+  # Redis, cada una en un nodo distinto, y hay 2 workers. Si Argo CD se
+  # cae, la app sigue andando: solo se frenan los despliegues.
+  #
+  # Dex (login con GitHub u otros) y las notificaciones no se usan todavía:
+  # 0 réplicas, sin borrar nada del install.yaml. Prenderlos es cambiar el
+  # número.
+  - target:
+      kind: Deployment
+      name: argocd-dex-server
+    patch: |-
+      - op: add
+        path: /spec/replicas
+        value: 0
+  - target:
+      kind: Deployment
+      name: argocd-notifications-controller
+    patch: |-
+      - op: add
+        path: /spec/replicas
+        value: 0
+  # Pedidos de recursos iniciales: el install.yaml no pide nada, y un Pod
+  # sin pedidos es de los primeros en morir si el nodo se queda sin
+  # memoria. Son estimaciones (2026-10-17): se miden con crictl stats y se
+  # ajustan en un commit aparte. Sin límites por ahora, a propósito: un
+  # límite de memoria sin medir puede matar al repo-server en un pico.
+  # Total: 240m de CPU y 640 Mi.
+  - target:
+      kind: StatefulSet
+      name: argocd-application-controller
+    patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: argocd-application-controller
+      spec:
+        template:
+          spec:
+            containers:
+              - name: argocd-application-controller
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 256Mi
+  - target:
+      kind: Deployment
+      name: argocd-repo-server
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: argocd-repo-server
+      spec:
+        template:
+          spec:
+            containers:
+              - name: argocd-repo-server
+                resources:
+                  requests:
+                    cpu: 50m
+                    memory: 128Mi
+  - target:
+      kind: Deployment
+      name: argocd-server
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: argocd-server
+      spec:
+        template:
+          spec:
+            containers:
+              - name: argocd-server
+                resources:
+                  requests:
+                    cpu: 50m
+                    memory: 128Mi
+  - target:
+      kind: Deployment
+      name: argocd-redis
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: argocd-redis
+      spec:
+        template:
+          spec:
+            containers:
+              - name: redis
+                resources:
+                  requests:
+                    cpu: 20m
+                    memory: 64Mi
+  - target:
+      kind: Deployment
+      name: argocd-applicationset-controller
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: argocd-applicationset-controller
+      spec:
+        template:
+          spec:
+            containers:
+              - name: argocd-applicationset-controller
+                resources:
+                  requests:
+                    cpu: 20m
+                    memory: 64Mi
+images:
+  # Las tres imágenes por digest (índice multiplataforma, consultado a
+  # cada registro el 2026-10-17): corre exactamente lo que se revisó,
+  # aunque alguien vuelva a publicar el tag.
+  - name: quay.io/argoproj/argocd
+    newTag: v3.5.5
+    digest: sha256:13db7b10db23283b1b36f855046602e18539a8a8204c9f6f039e8896c8897518
+  - name: ghcr.io/dexidp/dex
+    newTag: v2.45.1
+    digest: sha256:8499afd690c437f52301efd2b05b2455da5bd2dfc20332cd697dc9937f808462
+  - name: public.ecr.aws/docker/library/redis
+    newTag: 8.2.3-alpine
+    digest: sha256:08ad0b1d280850169a790dba1393ff7a90aef951fc19632cf4d3ce4f78e679ba

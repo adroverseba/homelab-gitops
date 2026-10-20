@@ -28,6 +28,10 @@ apps/                         lo de cada app, en su namespace
     ├── 30-backend.yaml       ConfigMap + ServiceAccount + Deployment + Service
     └── 40-httproute.yaml     rutas en el Gateway compartido: /api → backend, / → frontend
 platform/                     lo compartido por todas las apps
+├── argocd/                   Argo CD, el despliegue continuo (ADR 0010)
+│   ├── 00-namespace.yaml     namespace "argocd" (restricted)
+│   ├── install-v3.5.5.yaml   archivo oficial de la release (non-HA), sin tocar
+│   └── kustomization.yaml    los cambios propios (réplicas, recursos, digests)
 ├── envoy-gateway/            controlador de la Gateway API (ADR 0006)
 │   ├── install-v1.9.2.yaml   archivo oficial de la release, sin tocar
 │   └── kustomization.yaml    los cambios propios (Pod Security, digest)
@@ -87,6 +91,43 @@ programa los Envoy que reciben el tráfico. Decisión y trade-offs: ADR
   nombre, anotar su `sha256` acá, cambiar `resources` y el digest en
   `kustomization.yaml`, y leer las notas de la release. Un commit por
   actualización, sin mezclarla con otros cambios.
+
+### Argo CD (`platform/argocd/`)
+
+Mira este repo y aplica en el clúster lo que cambia (GitOps). Decisión y
+trade-offs: ADR 0010 del vault. **Al principio gestiona solo
+`apps/habit-tracker/`**; la plataforma (esta carpeta incluida) sigue a
+mano.
+
+- **Versión:** `v3.5.5`, modo **non-HA** (el HA pide 3 nodos para Redis y
+  hay 2 workers). La serie 3.5 está probada con Kubernetes 1.33 a 1.36.
+- **`install-v3.5.5.yaml` es el archivo oficial, sin tocar.** Su `sha256`
+  es
+  `90dc9094bf4c5964afd9c0e35d735e1c2fcbbda4f8e36799c092d9864ed65f50`
+  (bajado el 2026-10-17). Para comprobarlo:
+
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.5/manifests/install.yaml | sha256sum
+  ```
+
+- **Los cambios propios** van en `kustomization.yaml`: el namespace con
+  Pod Security `restricted`, Dex y las notificaciones en 0 réplicas (no se
+  usan todavía), pedidos de recursos iniciales (estimados, a medir) y las
+  tres imágenes por digest.
+- **Permisos amplios:** el controlador tiene permiso sobre todo el clúster
+  (así viene el `install.yaml`). Lo que Argo CD puede desplegar se acota
+  con un AppProject, pero eso no achica los permisos de su cuenta de
+  servicio en Kubernetes.
+- **Se aplica del lado del servidor y con `-k`:**
+
+  ```bash
+  kubectl kustomize ~/homelab-gitops/platform/argocd/ > /tmp/argocd.yaml   # revisar lo que se va a aplicar
+  kubectl apply --server-side -k ~/homelab-gitops/platform/argocd/
+  ```
+
+- **Para actualizar:** igual que Envoy Gateway (archivo nuevo con la
+  versión en el nombre, su `sha256` acá, los digests nuevos y las notas
+  de la release), un commit por actualización.
 
 ### El Gateway compartido (`platform/gateway/`)
 
