@@ -31,7 +31,8 @@ platform/                     lo compartido por todas las apps
 ├── argocd/                   Argo CD, el despliegue continuo (ADR 0010)
 │   ├── 00-namespace.yaml     namespace "argocd" (restricted)
 │   ├── install-v3.5.5.yaml   archivo oficial de la release (non-HA), sin tocar
-│   └── kustomization.yaml    los cambios propios (réplicas, recursos, digests)
+│   ├── kustomization.yaml    los cambios propios (réplicas, recursos, digests)
+│   └── patch-argocd-cm.yaml  los tipos que Argo CD ignora, sin EndpointSlice
 ├── envoy-gateway/            controlador de la Gateway API (ADR 0006)
 │   ├── install-v1.9.2.yaml   archivo oficial de la release, sin tocar
 │   └── kustomization.yaml    los cambios propios (Pod Security, digest)
@@ -113,7 +114,10 @@ mano.
 - **Los cambios propios** van en `kustomization.yaml`: el namespace con
   Pod Security `restricted`, Dex y las notificaciones en 0 réplicas (no se
   usan todavía), pedidos de recursos iniciales (estimados, a medir) y las
-  tres imágenes por digest.
+  tres imágenes por digest. Y `patch-argocd-cm.yaml`: la lista oficial de
+  tipos que Argo CD ignora, **sin EndpointSlice** (la app usa uno para
+  apuntar a la VM `db`). **Al actualizar Argo CD, comparar esa copia con
+  la lista del `install.yaml` nuevo.**
 - **Permisos amplios:** el controlador tiene permiso sobre todo el clúster
   (así viene el `install.yaml`). Lo que Argo CD puede desplegar se acota
   con un AppProject, pero eso no achica los permisos de su cuenta de
