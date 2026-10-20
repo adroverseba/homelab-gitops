@@ -31,6 +31,8 @@ platform/                     lo compartido por todas las apps
 ├── argocd/                   Argo CD, el despliegue continuo (ADR 0010)
 │   ├── 00-namespace.yaml     namespace "argocd" (restricted)
 │   ├── install-v3.5.5.yaml   archivo oficial de la release (non-HA), sin tocar
+│   ├── 10-project-habit-tracker.yaml  AppProject: qué puede desplegar (repo, namespace, tipos)
+│   ├── 20-app-habit-tracker.yaml      Application: apps/habit-tracker/ de main
 │   ├── kustomization.yaml    los cambios propios (réplicas, recursos, digests)
 │   └── patch-argocd-cm.yaml  los tipos que Argo CD ignora, sin EndpointSlice
 ├── envoy-gateway/            controlador de la Gateway API (ADR 0006)
@@ -122,6 +124,23 @@ mano.
   (así viene el `install.yaml`). Lo que Argo CD puede desplegar se acota
   con un AppProject, pero eso no achica los permisos de su cuenta de
   servicio en Kubernetes.
+- **Cada app, un AppProject con lista blanca por tipo** (el de
+  habit-tracker: `10-project-habit-tracker.yaml`). Si una app empieza a
+  usar un tipo nuevo, Argo CD no lo aplica hasta sumarlo al proyecto: es a
+  propósito.
+- **La Application no lleva el *finalizer* de borrado:** si se borra, Argo
+  CD deja de mirar la app, pero la app sigue corriendo.
+- **Acceso:** el usuario `admin` (contraseña en Bitwarden). Por ahora, solo
+  con el CLI desde el control-plane, por un túnel:
+
+  ```bash
+  ( kubectl -n argocd port-forward svc/argocd-server 8080:443 > /tmp/argocd-pf.log 2>&1 & )
+  argocd login localhost:8080 --username admin --insecure    # pide la contraseña
+  ```
+
+  `--insecure` (certificado autofirmado; el tráfico va dentro del túnel de
+  `kubectl`) va en **todos** los comandos que hablan con el servidor,
+  también en `logout`, o preguntan `y/n`.
 - **Se aplica del lado del servidor y con `-k`:**
 
   ```bash
@@ -158,6 +177,35 @@ kubectl apply -f ~/homelab-gitops/platform/gateway/
 
 Se crean a mano en el control-plane. Los valores están en Bitwarden,
 nunca acá.
+
+### argocd (plataforma)
+
+| Secret | Tipo | Para qué | Origen |
+|---|---|---|---|
+| `repo-homelab-gitops` | `Opaque`, label `argocd.argoproj.io/secret-type=repository` | Que Argo CD lea este repo (privado) por SSH | Una *deploy key* **propia de Argo CD, solo lectura** (GitHub: "argocd (homelab, solo lectura)"). La privada vive solo en el Secret |
+
+La contraseña de `admin` no es un Secret propio: Argo CD la guarda como
+*hash* en `argocd-secret`. El Secret inicial (`argocd-initial-admin-secret`)
+se borró después de cambiarla.
+
+Cómo se crea (la clave nace en una carpeta `700`, va al Secret por su ruta
+y se borra del disco; sin passphrase, porque Argo CD no puede tipearla):
+
+```bash
+install -d -m 700 ~/argocd-key
+ssh-keygen -q -t ed25519 -N '' -C 'argocd@homelab (solo lectura homelab-gitops)' -f ~/argocd-key/id_ed25519
+cat ~/argocd-key/id_ed25519.pub    # → GitHub, Settings → Deploy keys, SIN "Allow write access"
+kubectl -n argocd create secret generic repo-homelab-gitops --from-literal=type=git \
+  --from-literal=url=git@github.com:adroverseba/homelab-gitops.git \
+  --from-file=sshPrivateKey="$HOME/argocd-key/id_ed25519"
+kubectl -n argocd label secret repo-homelab-gitops argocd.argoproj.io/secret-type=repository app.kubernetes.io/part-of=homelab-platform
+shred -u ~/argocd-key/id_ed25519 && rm ~/argocd-key/id_ed25519.pub && rmdir ~/argocd-key
+argocd repo list --refresh hard --insecure    # STATUS: Successful
+```
+
+Rotación: clave nueva y su *deploy key* en GitHub → `kubectl -n argocd
+delete secret repo-homelab-gitops` → crearlo de nuevo → `argocd repo list`
+en `Successful` → borrar la *deploy key* vieja en GitHub.
 
 ### habit-tracker
 

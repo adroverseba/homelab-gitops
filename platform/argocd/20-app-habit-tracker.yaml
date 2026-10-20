@@ -1,0 +1,33 @@
+# La Application del Habit Tracker: Argo CD compara apps/habit-tracker/ de
+# la rama main con el clúster. Runbook "CD con Argo CD", paso 6.4c.
+#
+# Por ahora SIN sincronización automática (sin "automated"): Argo CD
+# muestra las diferencias y se sincroniza a mano. El paso 6.5 activa
+# automated + selfHeal, sin prune (ADR 0010, punto 3).
+#
+# Sin el finalizer "resources-finalizer.argocd.argoproj.io", a propósito:
+# si se borra esta Application, la app sigue corriendo (Argo CD deja de
+# mirarla, no la borra).
+#
+# Los Secrets de la app (ghcr-pull, habit-tracker-backend) no están en git:
+# Argo CD no los conoce ni los toca.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: habit-tracker
+  labels:
+    app.kubernetes.io/part-of: homelab-platform
+spec:
+  project: habit-tracker
+  source:
+    repoURL: git@github.com:adroverseba/homelab-gitops.git
+    targetRevision: main
+    path: apps/habit-tracker
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: habit-tracker
+  syncPolicy:
+    syncOptions:
+      # Apply del lado del servidor, como en la plataforma. Resuelve el
+      # "falso configured" de los PDB y del Gateway con el apply clásico.
+      - ServerSideApply=true

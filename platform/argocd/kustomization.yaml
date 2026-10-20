@@ -16,6 +16,9 @@ namespace: argocd
 resources:
   - 00-namespace.yaml
   - install-v3.5.5.yaml
+  # Lo que gestiona Argo CD (al principio, solo el Habit Tracker).
+  - 10-project-habit-tracker.yaml
+  - 20-app-habit-tracker.yaml
 patches:
   # Non-HA (decisión del usuario, 2026-10-17): el modo HA pide 3 copias de
   # Redis, cada una en un nodo distinto, y hay 2 workers. Si Argo CD se

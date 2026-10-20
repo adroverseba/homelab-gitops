@@ -1,0 +1,43 @@
+# El AppProject de la app (ADR 0010 del vault, "Permisos amplios"). Runbook
+# "CD con Argo CD", paso 6.4c.
+#
+# Argo CD tiene permiso sobre todo el clúster; este proyecto acota lo que
+# DECIDE desplegar: desde qué repo, a qué namespace y qué tipos de objeto.
+# No achica los permisos de su cuenta de servicio en Kubernetes.
+#
+# Lista blanca por tipo (decisión del usuario, 2026-10-20): solo los tipos
+# que usa apps/habit-tracker/ hoy. Un tipo nuevo en la app exige sumarlo
+# acá: es fricción a propósito (un Role o un Secret no entran por error).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: habit-tracker
+  labels:
+    app.kubernetes.io/part-of: homelab-platform
+spec:
+  description: El Habit Tracker, solo en su namespace.
+  sourceRepos:
+    - git@github.com:adroverseba/homelab-gitops.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: habit-tracker
+  # Del clúster, solo su propio Namespace (por nombre).
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+      name: habit-tracker
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ServiceAccount
+    - group: apps
+      kind: Deployment
+    - group: policy
+      kind: PodDisruptionBudget
+    - group: discovery.k8s.io
+      kind: EndpointSlice
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
