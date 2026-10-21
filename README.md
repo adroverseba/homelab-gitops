@@ -45,19 +45,44 @@ platform/                     lo compartido por todas las apps
     └── 30-gateway.yaml       Gateway "homelab", HTTP :80, solo namespaces con label
 ```
 
-## Cómo se aplica (a mano hasta la Fase 7)
+## Cómo se aplica
 
-En el control-plane:
+### Las apps (`apps/`): las aplica Argo CD, solas
+
+Desde el 2026-10-21, **Argo CD sincroniza `apps/habit-tracker/` solo**
+(`automated` + `selfHeal`, sin `prune`; ver `platform/argocd/`):
+
+- **Un push a `main` llega al clúster en ≤ 2–3 min**, sin ningún
+  `kubectl apply`. Por eso el cambio se revisa **antes** del push.
+- **Nunca `kubectl apply` ni `kubectl edit` sobre la app:** un cambio a
+  mano en un campo que define git se deshace en segundos (`selfHeal`).
+  Ojo: lo que se **agrega** en un campo que git no menciona no se deshace
+  ni se detecta (con *server-side apply* tiene otro dueño).
+- **Volver atrás:** `git revert <commit>` + push.
+- **Si algo desaparece de git, no se borra del clúster** (`prune:
+  false`): Argo CD lo marca y se borra a mano.
+- **Emergencia:** `argocd app set habit-tracker --sync-policy none
+  --insecure` apaga la sincronización (queda distinto de git: anotarlo y
+  volver a encenderla con el commit que corresponda).
+
+Para mirar qué cambiaría antes de un push (en el control-plane, con el
+túnel y el login de la sección de Argo CD):
+
+```bash
+argocd app diff habit-tracker --insecure    # código 1 = hay diferencias
+argocd app get habit-tracker --refresh --insecure
+```
+
+### La plataforma (`platform/`): a mano, desde el control-plane
 
 ```bash
 git -C ~/homelab-gitops pull --ff-only
-kubectl diff -f ~/homelab-gitops/apps/habit-tracker/    # se revisa como un PR
-kubectl apply -f ~/homelab-gitops/apps/habit-tracker/
+kubectl diff --server-side -k ~/homelab-gitops/platform/argocd/    # se revisa como un PR
+kubectl apply --server-side -k ~/homelab-gitops/platform/argocd/
 ```
 
 `kubectl diff` sale con código 1 cuando **hay** diferencias: es lo
-esperado, no un error. En la Fase 7, Argo CD hace el pull y el apply
-solo.
+esperado, no un error.
 
 ## Plataforma
 
