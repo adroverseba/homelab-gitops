@@ -18,9 +18,6 @@ metadata:
     app.kubernetes.io/name: habit-tracker-backend
     app.kubernetes.io/component: backend
     app.kubernetes.io/part-of: habit-tracker
-    # Prueba del flujo GitOps (runbook "CD con Argo CD", 6.5d): Argo CD la
-    # aplica sola, y el revert de este commit la saca sola.
-    homelab/prueba-gitops: "6-5d"
 data:
   # Sin esto, la app arranca en "dev" sin avisar (DEPLOY.md de la app).
   SPRING_PROFILES_ACTIVE: prod
