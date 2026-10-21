@@ -44,6 +44,8 @@ patches:
   # EndpointSlice fuera de las exclusiones de Argo CD: la app tiene uno
   # escrito a mano (la dirección de la VM db). Detalle en el archivo.
   - path: patch-argocd-cm.yaml
+  # argocd-server sin su TLS propio: el cifrado lo da Tailscale (6.6.1).
+  - path: patch-argocd-cmd-params-cm.yaml
   # Pedidos de recursos iniciales: el install.yaml no pide nada, y un Pod
   # sin pedidos es de los primeros en morir si el nodo se queda sin
   # memoria. Son estimaciones (2026-10-17): se miden con crictl stats y se

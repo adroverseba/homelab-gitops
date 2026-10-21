@@ -1,0 +1,22 @@
+# Parche de argocd-cmd-params-cm (lo usa kustomization.yaml). Runbook "CD
+# con Argo CD", paso 6.6.1.
+#
+# server.insecure: argocd-server deja de servir su propio TLS (certificado
+# autofirmado) y atiende HTTP. La interfaz web llega por Tailscale (que
+# cifra con Let's Encrypt) → HAProxy → el Gateway (listener "argocd"), y
+# un proxy que ya descifró el TLS no puede hablarle a Argo CD con otro TLS
+# autofirmado sin verificarlo. Es lo que pide la documentación de Argo CD
+# detrás de un proxy o ingress que termina el TLS.
+#
+# Costo aceptado: dentro del clúster, el tramo Envoy → argocd-server va sin
+# cifrar (como la app; deuda de la Fase 9). Por el túnel de kubectl el CLI
+# sigue cifrado, pero pasa de --insecure a --plaintext.
+#
+# Argo CD lee este ConfigMap al arrancar: después de aplicarlo hay que
+# reiniciar argocd-server.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cmd-params-cm
+data:
+  server.insecure: "true"
