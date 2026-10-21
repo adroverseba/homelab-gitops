@@ -34,3 +34,21 @@ spec:
           selector:
             matchLabels:
               homelab/gateway: allowed
+    # La entrada de la interfaz de Argo CD (ADR 0010, punto 4; runbook "CD
+    # con Argo CD", 6.6.2). Otro puerto, con su propio NodePort (30081), para
+    # que HAProxy la publique SOLO en 127.0.0.1 → tailscale serve: la red de
+    # casa no llega (el listener "http" sí está en 192.168.1.16:80).
+    # Acepta rutas solo del namespace argocd, por su nombre (la etiqueta
+    # kubernetes.io/metadata.name la pone Kubernetes y no se puede falsificar
+    # desde el manifiesto del namespace).
+    - name: argocd
+      protocol: HTTP
+      port: 8081
+      allowedRoutes:
+        kinds:
+          - kind: HTTPRoute
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: argocd
