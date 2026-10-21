@@ -17,6 +17,14 @@ metadata:
   name: habit-tracker
   labels:
     app.kubernetes.io/part-of: homelab-platform
+  annotations:
+    # Comparar del lado del servidor (estable desde Argo CD 3.1): el
+    # apiserver hace un ensayo (dry-run) del apply y Argo CD compara con eso,
+    # así conoce los valores por defecto de cualquier CRD. Con
+    # ServerSideApply, la comparación por defecto ("Structured-Merge Diff",
+    # discontinuada) no los conoce, y el HTTPRoute quedaba OutOfSync para
+    # siempre (group, kind y weight que completa el CRD de Gateway API).
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
   project: habit-tracker
   source:
