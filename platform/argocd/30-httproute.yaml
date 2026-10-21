@@ -1,0 +1,23 @@
+# La ruta de la interfaz de Argo CD (ADR 0010, punto 4; runbook "CD con
+# Argo CD", 6.6.3). Se ata SOLO al listener "argocd" del Gateway compartido
+# (8081, NodePort 30081), que HAProxy publica solo en 127.0.0.1 para
+# tailscale serve: por la red de casa no se llega.
+#
+# Todo lo que entra por ese listener va a argocd-server (el Service, puerto
+# 80 → el 8080 del Pod, HTTP sin TLS desde el 6.6.1). La interfaz web y la
+# API de Argo CD usan HTTP/1.1; el CLI, por esta entrada, con --grpc-web.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: argocd
+  labels:
+    app.kubernetes.io/part-of: homelab-platform
+spec:
+  parentRefs:
+    - name: homelab
+      namespace: gateway
+      sectionName: argocd
+  rules:
+    - backendRefs:
+        - name: argocd-server
+          port: 80
