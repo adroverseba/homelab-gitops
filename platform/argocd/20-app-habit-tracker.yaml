@@ -1,9 +1,9 @@
 # La Application del Habit Tracker: Argo CD compara apps/habit-tracker/ de
-# la rama main con el clúster. Runbook "CD con Argo CD", paso 6.4c.
+# la rama main con el clúster y lo aplica solo. Runbook "CD con Argo CD",
+# pasos 6.4c (creada, con sync a mano) y 6.5 (sync automático).
 #
-# Por ahora SIN sincronización automática (sin "automated"): Argo CD
-# muestra las diferencias y se sincroniza a mano. El paso 6.5 activa
-# automated + selfHeal, sin prune (ADR 0010, punto 3).
+# Desde el 6.5, la app NO se cambia con kubectl: se cambia en git. Un cambio
+# a mano en un campo de git se deshace solo (selfHeal).
 #
 # Sin el finalizer "resources-finalizer.argocd.argoproj.io", a propósito:
 # si se borra esta Application, la app sigue corriendo (Argo CD deja de
@@ -35,6 +35,17 @@ spec:
     server: https://kubernetes.default.svc
     namespace: habit-tracker
   syncPolicy:
+    # Sincronización automática (ADR 0010, punto 3; runbook, paso 6.5):
+    # - cada cambio de main en apps/habit-tracker/ se aplica solo;
+    # - selfHeal: un cambio hecho a mano en un campo que define git se
+    #   deshace solo. Ojo: lo que se AGREGA en un campo que git no menciona
+    #   no cuenta como diferencia y queda (probado en el 6.5a);
+    # - prune: false. Si algo desaparece de git, Argo CD NO lo borra del
+    #   clúster: lo marca y se borra a mano. Se revisa con alertas y backup
+    #   fuera de casa.
+    automated:
+      selfHeal: true
+      prune: false
     syncOptions:
       # Apply del lado del servidor, como en la plataforma. Resuelve el
       # "falso configured" de los PDB y del Gateway con el apply clásico.
