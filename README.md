@@ -26,7 +26,8 @@ apps/                         lo de cada app, en su namespace
     ├── 10-postgres.yaml      Service sin selector + EndpointSlice → VM db
     ├── 20-frontend.yaml      ServiceAccount + Deployment + Service
     ├── 30-backend.yaml       ConfigMap + ServiceAccount + Deployment + Service
-    └── 40-httproute.yaml     rutas en el Gateway compartido: /api → backend, / → frontend
+    ├── 40-httproute.yaml     rutas en el Gateway compartido: /api → backend, / → frontend
+    └── kustomization.yaml    los 5 archivos + images: (tag y digest; los cambia el PR del CI)
 platform/                     lo compartido por todas las apps
 ├── argocd/                   Argo CD, el despliegue continuo (ADR 0010)
 │   ├── 00-namespace.yaml     namespace "argocd" (restricted)
@@ -56,11 +57,25 @@ Desde el 2026-10-21, **Argo CD sincroniza `apps/habit-tracker/` solo**
 
 - **Un push a `main` llega al clúster en ≤ 2–3 min**, sin ningún
   `kubectl apply`. Por eso el cambio se revisa **antes** del push.
+- **Las imágenes nuevas llegan por PR** (desde el 2026-10-22): al publicar
+  en `main` del repo de la app, su CI (job `gitops-pr`) abre o actualiza un
+  PR en la rama `ci/deploy-habit-tracker`, firmado por
+  `homelab-ci-adroverseba[bot]`, que cambia **solo** el tag y el digest de
+  `images:` en `apps/habit-tracker/kustomization.yaml` (con `yq`, que
+  conserva los comentarios). El PR trae una tabla antes/ahora y los
+  enlaces a lo que cambió en la app. **Revisarlo e integrarlo es la
+  decisión de desplegar.** La credencial es una GitHub App instalada solo
+  en este repo (contenido y PR); el CI pide un token de 1 hora y se frena
+  si el token llega a otro repo.
+- **La app se arma con Kustomize** (`kustomization.yaml`; Argo CD lo
+  detecta solo). Los Deployments dicen solo el nombre de la imagen: el tag
+  y el digest viven en `images:`.
 - **Nunca `kubectl apply` ni `kubectl edit` sobre la app:** un cambio a
   mano en un campo que define git se deshace en segundos (`selfHeal`).
   Ojo: lo que se **agrega** en un campo que git no menciona no se deshace
   ni se detecta (con *server-side apply* tiene otro dueño).
-- **Volver atrás:** `git revert <commit>` + push.
+- **Volver atrás:** `git revert <commit>` + push (para una imagen: revertir
+  el PR del bot).
 - **Si algo desaparece de git, no se borra del clúster** (`prune:
   false`): Argo CD lo marca y se borra a mano.
 - **Emergencia:** `argocd app set habit-tracker --sync-policy none`
