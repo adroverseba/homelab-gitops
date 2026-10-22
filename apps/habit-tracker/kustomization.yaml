@@ -1,0 +1,29 @@
+# La app Habit Tracker, armada con Kustomize (runbook "CD con Argo CD",
+# paso CD.7.1). Argo CD la detecta sola: si la carpeta tiene un
+# kustomization.yaml, la arma con Kustomize en vez de leer los YAML sueltos.
+#
+# Para qué: las imágenes. Su tag y su digest viven acá, en un solo lugar,
+# y el CI del repo de la app los cambia con una herramienta
+#   kustomize edit set image ghcr.io/adroverseba/habit-tracker-backend:sha-<commit>@sha256:<digest>
+# en vez de editar los Deployments con sed. Ese cambio llega como un PR
+# que revisa el usuario (ADR 0010, punto 2).
+#
+# Sin namespace ni etiquetas comunes acá: cada archivo ya los declara, y
+# Kustomize tiene que armar exactamente los mismos objetos que antes.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - 00-namespace.yaml
+  - 10-postgres.yaml
+  - 20-frontend.yaml
+  - 30-backend.yaml
+  - 40-httproute.yaml
+images:
+  # Merge 41141e9 (PR #2): bases fijadas por digest, usuario 10001 y exec en
+  # el ENTRYPOINT.
+  - name: ghcr.io/adroverseba/habit-tracker-backend
+    newTag: sha-41141e9
+    digest: sha256:a150f61dfbb8feb56d20baf12fe2fc849e1b37647e94e06f83b70e90664e68ba
+  - name: ghcr.io/adroverseba/habit-tracker-frontend
+    newTag: sha-3a4511e
+    digest: sha256:4027842f7c629675c5695a5fef974efbbf043b97e8cea893eac428371a99661f
