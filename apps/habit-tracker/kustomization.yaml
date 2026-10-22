@@ -19,8 +19,10 @@ resources:
   - 30-backend.yaml
   - 40-httproute.yaml
 images:
-  # Merge 41141e9 (PR #2): bases fijadas por digest, usuario 10001 y exec en
-  # el ENTRYPOINT.
+  # Las imágenes que corren en producción, por tag y digest. Las cambia el
+  # PR que abre el CI del repo de la app (job gitops-pr, con yq: este
+  # comentario se conserva); qué commit las construyó se ve en el tag
+  # (sha-<commit>) y en el PR que las trajo.
   - name: ghcr.io/adroverseba/habit-tracker-backend
     newTag: sha-41141e9
     digest: sha256:a150f61dfbb8feb56d20baf12fe2fc849e1b37647e94e06f83b70e90664e68ba
