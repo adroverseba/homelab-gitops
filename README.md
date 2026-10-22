@@ -32,9 +32,11 @@ platform/                     lo compartido por todas las apps
 │   ├── 00-namespace.yaml     namespace "argocd" (restricted)
 │   ├── install-v3.5.5.yaml   archivo oficial de la release (non-HA), sin tocar
 │   ├── 10-project-habit-tracker.yaml  AppProject: qué puede desplegar (repo, namespace, tipos)
-│   ├── 20-app-habit-tracker.yaml      Application: apps/habit-tracker/ de main
+│   ├── 20-app-habit-tracker.yaml      Application: apps/habit-tracker/ de main (automated + selfHeal)
+│   ├── 30-httproute.yaml     la interfaz web, en el listener "argocd" (solo por Tailscale)
 │   ├── kustomization.yaml    los cambios propios (réplicas, recursos, digests)
-│   └── patch-argocd-cm.yaml  los tipos que Argo CD ignora, sin EndpointSlice
+│   ├── patch-argocd-cm.yaml  los tipos que Argo CD ignora, sin EndpointSlice
+│   └── patch-argocd-cmd-params-cm.yaml  argocd-server sin TLS propio (lo da Tailscale)
 ├── envoy-gateway/            controlador de la Gateway API (ADR 0006)
 │   ├── install-v1.9.2.yaml   archivo oficial de la release, sin tocar
 │   └── kustomization.yaml    los cambios propios (Pod Security, digest)
@@ -42,7 +44,7 @@ platform/                     lo compartido por todas las apps
     ├── 00-namespace.yaml     namespace "gateway" (restricted)
     ├── 10-gatewayclass.yaml  GatewayClass "envoy"
     ├── 20-envoyproxy.yaml    su Envoy: Service NodePort 30080 (lo usa HAProxy)
-    └── 30-gateway.yaml       Gateway "homelab", HTTP :80, solo namespaces con label
+    └── 30-gateway.yaml       Gateway "homelab": http :80 (apps con label) y argocd :8081 (NodePort 30081, solo Tailscale)
 ```
 
 ## Cómo se aplica
@@ -61,16 +63,16 @@ Desde el 2026-10-21, **Argo CD sincroniza `apps/habit-tracker/` solo**
 - **Volver atrás:** `git revert <commit>` + push.
 - **Si algo desaparece de git, no se borra del clúster** (`prune:
   false`): Argo CD lo marca y se borra a mano.
-- **Emergencia:** `argocd app set habit-tracker --sync-policy none
-  --insecure` apaga la sincronización (queda distinto de git: anotarlo y
+- **Emergencia:** `argocd app set habit-tracker --sync-policy none`
+  apaga la sincronización (queda distinto de git: anotarlo y
   volver a encenderla con el commit que corresponda).
 
 Para mirar qué cambiaría antes de un push (en el control-plane, con el
 túnel y el login de la sección de Argo CD):
 
 ```bash
-argocd app diff habit-tracker --insecure    # código 1 = hay diferencias
-argocd app get habit-tracker --refresh --insecure
+argocd app diff habit-tracker    # código 1 = hay diferencias
+argocd app get habit-tracker --refresh
 ```
 
 ### La plataforma (`platform/`): a mano, desde el control-plane
@@ -155,17 +157,26 @@ mano.
   propósito.
 - **La Application no lleva el *finalizer* de borrado:** si se borra, Argo
   CD deja de mirar la app, pero la app sigue corriendo.
-- **Acceso:** el usuario `admin` (contraseña en Bitwarden). Por ahora, solo
-  con el CLI desde el control-plane, por un túnel:
+- **Acceso:** el usuario `admin` (contraseña en Bitwarden), por dos
+  caminos:
+  - **La interfaz web: `https://homelab.taile02a6a.ts.net:8443`, solo con
+    Tailscale conectado.** Camino: `tailscale serve` (8443, certificado de
+    Let's Encrypt) → HAProxy del host **solo en `127.0.0.1:8081`** → los
+    workers en el NodePort `30081` → el listener `argocd` del Gateway
+    (`platform/gateway/`) → `30-httproute.yaml` → `argocd-server`. Desde la
+    red de casa no se llega por ningún camino.
+  - **El CLI desde el control-plane, por un túnel:**
 
-  ```bash
-  ( kubectl -n argocd port-forward svc/argocd-server 8080:443 > /tmp/argocd-pf.log 2>&1 & )
-  argocd login localhost:8080 --username admin --insecure    # pide la contraseña
-  ```
+    ```bash
+    ( kubectl -n argocd port-forward svc/argocd-server 8080:443 > /tmp/argocd-pf.log 2>&1 & )
+    argocd login localhost:8080 --username admin --plaintext --skip-test-tls    # pide la contraseña
+    ```
 
-  `--insecure` (certificado autofirmado; el tráfico va dentro del túnel de
-  `kubectl`) va en **todos** los comandos que hablan con el servidor,
-  también en `logout`, o preguntan `y/n`.
+    Argo CD no tiene TLS propio (`patch-argocd-cmd-params-cm.yaml`: el
+    cifrado lo da Tailscale, y por el túnel, `kubectl`). **`--skip-test-tls`
+    es obligatorio:** sin eso, el login prueba TLS primero, Argo CD corta
+    esa conexión y el corte tumba el túnel. Después del login, el CLI
+    recuerda el modo y los demás comandos no llevan banderas.
 - **Se aplica del lado del servidor y con `-k`:**
 
   ```bash
@@ -225,7 +236,7 @@ kubectl -n argocd create secret generic repo-homelab-gitops --from-literal=type=
   --from-file=sshPrivateKey="$HOME/argocd-key/id_ed25519"
 kubectl -n argocd label secret repo-homelab-gitops argocd.argoproj.io/secret-type=repository app.kubernetes.io/part-of=homelab-platform
 shred -u ~/argocd-key/id_ed25519 && rm ~/argocd-key/id_ed25519.pub && rmdir ~/argocd-key
-argocd repo list --refresh hard --insecure    # STATUS: Successful
+argocd repo list --refresh hard    # STATUS: Successful
 ```
 
 Rotación: clave nueva y su *deploy key* en GitHub → `kubectl -n argocd
