@@ -24,8 +24,8 @@ images:
   # comentario se conserva); qué commit las construyó se ve en el tag
   # (sha-<commit>) y en el PR que las trajo.
   - name: ghcr.io/adroverseba/habit-tracker-backend
-    newTag: sha-20cc4bd
-    digest: sha256:5ba91aaaa3adf70c9ec81a45ee23b0230bc0a94809a596a07f16128186d5f2f3
+    newTag: sha-fae08c0
+    digest: sha256:c76e088c0dad1633a67e5b9f34637b75e590db231de7d33009891b0d2d9ba906
   - name: ghcr.io/adroverseba/habit-tracker-frontend
-    newTag: sha-20cc4bd
-    digest: sha256:a396b672efafdcbd463a50a8ba435e8e72a8ca04cb9b4fe1e40b1f29e85c3832
+    newTag: sha-fae08c0
+    digest: sha256:9e3f03fc3767c8287ed51248a10372fe34faa6e067431015a4f672b9b8f4e45e
